@@ -496,23 +496,12 @@ def stringCleaner(my_str):
  
 
 MESWs =  ['soma', 'full', 'basal', 'aTuft', None]
-#MESWs = ['None']
-#MESWs = ['aTuft']
-# order = [(10000,1000), (2000,1000), (1000,1000)]
-# order = [(1000,100), (1000,1000), (1000,2000)]
-# capacityCalc(order, problem = 'mem', MESWs = MESWs)
- 
-order = [(10000, 0.0001), (1000, 0.0001), (1000, 0.001), (1000, 0.01)]
-order = [(10000, 1e-05), (10000, 0.0001), (10000, 0.001), (10000, 0.01)]
-order = [(10000, 1e-07), (10000, 1e-05), (10000, 1e-3)]
-order = [(10000, 1000), (1000, 1000), (500, 1000)]
-order = [(1000, 2), (1000, 70), (1000,130)]
-order = [(1000, 2), (1000, 100), (1000, 200)]
-order = [(1000, 0), (1000, 100), (1000, 200)]
-order = [(1000, 100), (1000, 1000), (1000, 2000)]
-# print order
 save = 0
+# print order
+#For generalization task
 # order = [(1000, 0), (1000, 100), (1000, 200)]
 # capacityCalc(order, problem = 'gen2', MESWs = MESWs, passive = False, save = save)
+
+#For memorization task
 order = [(1000, 100), (1000, 1000), (1000, 2000)]
 capacityCalc(order, problem = 'mem', MESWs = MESWs, passive = False, save = save)

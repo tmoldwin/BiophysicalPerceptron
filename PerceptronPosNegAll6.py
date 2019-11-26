@@ -13,15 +13,11 @@ Created on Thu May 19 17:29:15 2016
 
 #import NEURONFix
 import sys
-# sys.path.append("D:/nrn/lib/python")
-# sys.path.append('/Applications/NEURON-7.3/nrn/lib/python')
-#sys.path.append('/Applications/NEURON-7.5/nrn/lib/python')
-# sys.path.append("/home/ls/users/toviah.moldwin/Dropbox/IdanLab/PythonFiles/NEURONPython")
-import matplotlib
 #matplotlib.use('Qt5Agg')
 import numpy as np
 from neuron import h, gui
 from L5PC6 import L5PC6
+import matplotlib
 import os
 if not "SSH_CONNECTION" in os.environ:
     from matplotlib import pyplot as plt
@@ -46,9 +42,7 @@ matplotlib.rc('axes', labelsize=20)
 matplotlib.rc('axes', titlesize=20)  
 rcParams['figure.figsize'] = 5, 5
 
-#ys.path.append("/home/ls/users/toviah.moldwin/Dropbox/IdanLab/PythonFiles/NEURONPython")
-
-""" This class extends an L5PC neuron to perform perceptron learn and predict behaviors """
+""" This class extends an L5PC neuron to perform perceptron learning and prediction behaviors """
 class PerceptronPosNegAll6():
     #Local
     def __init__(self, dataset, problem = 'mem', inputWeightMap = None, inputLocationMap = None, NMDABlock = False, DendBlock = False, Current = False, dispersion = [0,1], DistanceScale = False, saveFolder = "PPNTest", saveIterations = False, Traces = False):
@@ -372,10 +366,6 @@ class PerceptronPosNegAll6():
 #             with open(outputfn + '.json', 'w+') as json_file:
 #                 json.dump(iterations, json_file, default = obj_dict)
                 
-
-          
-  
-    
     def plotErrors(self, errorList, falsePosList, falseNegList,N,P):
         inds = np.arange(len(errorList))
         plt.ion()
@@ -405,28 +395,47 @@ class PerceptronPosNegAll6():
 def obj_dict(obj):
     return obj.__dict__         
 
-print socket.gethostname()
-if not "SSH_CONNECTION" in os.environ:
-#         'Gen2'
-         numFlips = 30
-         N = 1000
-         inhibRatio = 0
-         activeNum = 200
-         #data = pg.generateRand(P, N, inhibRatio, 0.1)
-         #data = pg.generateAllPos(P, N, inhibRatio, activeNum)
-#          print data.X
-#          print data.y
-#          print data.inhibInd
-         data = pg.DataSetBitFlip(N, activeNum, [-1,1], numFlips, inhibRatio = 0)
-         print data.contexts        
-         pb = PerceptronPosNegAll6(data, problem = 'gen2', NMDABlock = 0, Current = 0, DendBlock = 0, DistanceScale = 0, dispersion = 'full', saveFolder = 'Outputs/Tests/', saveIterations = True, Traces = True)
-         errors, fp, fn = pb.perceptronLearnGen(1e-2, numEpochs = 10, iterationsPerEpoch = 20, plot = False, batch = False) 
-         print('errors', errors)
-         fig = plt.figure('Errors')
-         plt.plot(range(len(errors)), errors)
-         plt.xlabel('Epoch')
-         plt.ylabel('Error')
-         plt.show()
-         plt.savefig('Gen2.png')
+##Classification task, 'Mem'
+#Parameters
+P = 30 #Number of patterns
+N = 1000 #Number synapses
+activeNum = 200 #Number of "active" synapses in each pattern
+lr = 1e-2 #Learning rate
+inhibRatio = 0
+dispersion = 'full' #can use any of ['soma', 'full', 'basal', 'aTuft', None], places synapses only on the specified region of the dendrite
+#End of parameters
+
+data = pg.generateRand(P, N, 0, activeNum) #Generate dataset
+
+pb = PerceptronPosNegAll6(data, problem = 'mem', NMDABlock = 0, Current = 0, DendBlock = 0, DistanceScale = 0, dispersion = dispersion, saveIterations = False, Traces = False, saveFolder = 'Outputs/Tests/Mem/')
+errors, fp, fn = pb.perceptronLearnMem(lr, numEpochs = 10, plot = False, run = 0)
+print('errors', errors)
+fig = plt.figure('Errors')
+plt.plot(range(len(errors)), errors)
+plt.xlabel('Epoch')
+plt.ylabel('Error')
+plt.show()
+plt.savefig('Mem.png')
          
+##Generalization task, 'Gen2'
+#  numFlips = 30 #Number of "corrupted" bits
+#  N = 1000 #Number synapses
+#  activeNum = 200 #Number of "active" synapses in each pattern
+#  lr = 1e-2 #Learning rate
+#  dispersion = 'full' #can use any of ['soma', 'full', 'basal', 'aTuft', None], places synapses only on the specified region of the dendrite
+# ##
+# 
+#  data = pg.DataSetBitFlip(N, activeNum, [-1,1], numFlips, inhibRatio = 0)
+#  print data.contexts        
+#  pb = PerceptronPosNegAll6(data, problem = 'gen2', NMDABlock = 0, Current = 0, DendBlock = 0, DistanceScale = 0, dispersion = 'full', saveFolder = 'Outputs/Tests/Gen2/', saveIterations = True, Traces = True)
+#  errors, fp, fn = pb.perceptronLearnGen(1e-2, numEpochs = 10, iterationsPerEpoch = 20, plot = False, batch = False) 
+#  print('errors', errors)
+#  fig = plt.figure('Errors')
+#  plt.plot(range(len(errors)), errors)
+#  plt.xlabel('Epoch')
+#  plt.ylabel('Error')
+#  plt.show()
+#  plt.savefig('Gen2.png')
+ 
+
          
