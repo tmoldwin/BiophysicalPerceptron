@@ -15,6 +15,7 @@ import cProfile
 import pstats
 import string
 import datetime
+import uniformDistDie as udd
 
 
 def zeroNan(vec):
@@ -28,7 +29,7 @@ def zeroNan(vec):
     else: return vec
     
 class Perceptron(object):
-    def __init__(self, dataset, problem = 'mem', MESW = None, passive = False, bias = False):
+    def __init__(self, dataset, problem = 'mem', MESW = None, passive = False, bias = False, AA = 1):
         self.dataset = dataset
         if bias:
             self.dataset.addExciteBias(1)
@@ -40,12 +41,13 @@ class Perceptron(object):
         else:
             pickleName = 'maxMap/maxMapL6_0VTrue.pkl'
         print 'pr', problem
-        if not self.MESW == None:
-            self.maxEffectiveWeights = createDie(self.N, MESW, pickleName)
+        if not self.MESW is None:
+            self.maxEffectiveWeights = np.array(udd.createCaps(self.N, MESW, MESW_name = 'MESWs/' + self.MESW + '/MESWs.json', AA = AA))
+            #print('weights', self.maxEffectiveWeights)
 #             plt.figure('MESW dist' + str(self.MESW), figsize = (5,5))
 #             print self.maxEffectiveWeights
 #             plt.hist(self.maxEffectiveWeights, bins = np.arange(0,1,0.01))
-            #plt.show()
+#             plt.show()
         
     def learnMem(self, maxEpochs, eta, Adam = True, run = 0, cond = 0, lambd = 0):
         X = self.dataset.X
@@ -95,7 +97,7 @@ class Perceptron(object):
                         dw = dw * flipVec
                         self.weights = self.weights + dw         
                     self.weights = np.maximum(self.weights, np.zeros(self.N))
-                    if not self.MESW == None:
+                    if not self.MESW is None:
                         self.weights[self.dataset.unbiasedStart:self.N] = np.minimum(self.weights[self.dataset.unbiasedStart:self.N], self.maxEffectiveWeights[self.dataset.unbiasedStart:self.N])                                     
             error = falsePos + falseNeg
             falsePosList.append(falsePos)
@@ -157,7 +159,7 @@ class Perceptron(object):
                         dw = dw * flipVec 
                         self.weights = self.weights + dw        
                     self.weights = np.maximum(self.weights, np.zeros(self.N))
-                    if not self.MESW == None: 
+                    if not self.MESW is None: 
                         self.weights = np.minimum(self.weights, self.maxEffectiveWeights)                                      
             error = falsePos + falseNeg
             falsePosList.append(falsePos)
@@ -208,8 +210,10 @@ class Perceptron(object):
 
     def predict(self, example, cond = 0):
         rev = 0
-        thresh = -22.8
+        thresh = -53.1
+        #thresh = -22
         rest = -77.13
+        #rest = -60
         inhibInd = self.dataset.inhibInd
         flipVec = np.ones(self.N)
         flipVec[self.dataset.inhibInd:self.N] = -flipVec[self.dataset.inhibInd:self.N]
@@ -234,6 +238,16 @@ class Perceptron(object):
 #     def kernelPredict(self, example, kernel = 'Gauss'):
 #         
 #     def kernelGauss(X)
+
+def createCaps(N, dispersion, MESW_name):
+    #Creeate a distribution of weight caps proportional to the length
+        MESWs, AA_MESWs, maxVoltage = udd.loadMESWs(MESW_name)
+        dieMap = udd.loadUniformDispMap(dispersion)
+        locations = udd.generateRandomLocations(dieMap, N)
+        weightsUni = udd.MESWUniformDist(locations, MESWs)
+        return weightsUni
+
+
 def createDie(N, MESW, pickleName):
     #pickleName = 'maxMap/maxMapL5PC41e+99.pkl'
     with open(pickleName, 'r') as f:
@@ -276,22 +290,24 @@ def axisConfigure(ax, numTicks = 2):
         
 def capacityCalc(order, problem, MESWs = None, passive = False, weight_decay = False, save = False):
     plt.ion()
-    activeNum = 200
     activeRatio = 0.2
     maxEpochs = 200
-    numRuns = 5
+    numRuns = 1
     if problem == 'gen2':
         maxEpochs = 5
         numRuns = 25
-        maxIterations = 1000
-        lr = 0.9
+        maxIterations = 100
+        lr = 0.1
     elif problem == 'mem':
-        lr = 0.001 * 0.8 #Note: save unbiased values!
+        lr = 0.008 * 0.1 #Note: save unbiased values!
+        #lr = lr * 0.1
+        #lr = 0.002 * 0.1 #Note: save unbiased values!
+        #lr = lr * 0.1
        # lr = 0.00004
 #         lr = 0.015
-        lr = 0.001
-        maxEpochs = 1000 
-        numRuns = 3
+        #lr = 0.001
+        maxEpochs = 100
+        numRuns = 10
     inhibRatio = 0
     name = 'M&P'
     plt.ion()
@@ -307,119 +323,124 @@ def capacityCalc(order, problem, MESWs = None, passive = False, weight_decay = F
                "order": order}
     if not os.path.exists(folderName):
         os.makedirs(folderName)
+    AAfn = folderName + '_AA'
+    if not os.path.exists(AAfn):
+        os.makedirs(AAfn)
     with open(folderName + '/Meta.json', 'w+') as f:
         json.dump(jsonOutputs, f)
-
-    for MESW in MESWs:
-        NPs = order
-        NPMap= {NPs[ind]:np.nan * np.ones([numRuns, maxEpochs]) for ind in range(len(NPs))}
-        FPMap= {NPs[ind]:np.nan * np.ones([numRuns, maxEpochs]) for ind in range(len(NPs))}
-        FNMap= {NPs[ind]:np.nan * np.ones([numRuns, maxEpochs]) for ind in range(len(NPs))}
-        runMap = {NPs[ind]:0 for ind in range(len(NPs))}
-        plotNum = MESWs.index(MESW)+1
-        for NP in order:
-            N = NP[0]
-            P = NP[1]
-            cumTrace = np.zeros(maxEpochs)
-            cumPosTrace = np.zeros(maxEpochs)
-            cumNegTrace = np.zeros(maxEpochs)
-            distParams = [NP[1]] #This is the variance of the beta distribution
-            #if problem == 'mem':
-                #lr = 0.1/P #Note: This is for review!
-            for run in range(numRuns):
-                print str(NP) + ' ' + str(MESW) + 'run' + str(run)
-                if problem == 'mem':
-                    newlr = lr
-                    newlr = lr
-                    if P <= 1000:
-                        newlr = lr/2
-                    if P == 2000:
-                        newlr = lr/50
-                    data = pg.generateRand(P,N,inhibRatio, activeNum)
-                    perc = Perceptron(data, problem, MESW = MESW, bias = 0)
-                    errors, fp, fn = perc.learnMem(maxEpochs, newlr, Adam = True, lambd = 0)
-                elif problem == 'mem2':
-                    activeRatio = activeRatio
-                    data = pg.generateRand(P,N,inhibRatio, N*activeRatio)
-                    perc = Perceptron(data, problem, MESW = MESW, passive = passive)
-                    errors, fp, fn = perc.learnMem(maxEpochs, lr, Adam = True)
-                elif problem == 'gen':
-                    maxIterations = 100
-                    numContexts = 2
-                    labels = np.ones(numContexts)
-                    labels[numContexts/2:numContexts] = -1
-                    data = pg.DataSetGen(N, activeNum, labels, distribution = 'beta', params = distParams)
-                    perc = Perceptron(data, problem, MESW = MESW)
-                    errors, fp, fn = perc.learnGen(maxEpochs, maxIterations, 0.0005,  Adam = True)
-                elif problem == 'gen2':
-                    numContexts = 2
-                    labels = np.ones(numContexts)
-                    labels[numContexts/2:numContexts] = -1
-                    data = pg.DataSetBitFlip(N, activeNum, [-1,1], P, inhibRatio = 0)
-                    perc = Perceptron(data, problem, MESW = MESW)
-                    errors, fp, fn = perc.learnGen(maxEpochs, maxIterations, lr,  Adam = 0)
-                #data = pg.generateNonBinary(P,N,inhibRatio)
-                #data.sort()
-                NPMap[NP][run][0:len(errors)] = errors
-                FPMap[NP][run][0:len(errors)] = fp
-                FNMap[NP][run][0:len(errors)] = fn
-                NPMap[NP][run] = zeroNan(NPMap[NP][run])
-                FPMap[NP][run] = zeroNan(FPMap[NP][run]) 
-                FNMap[NP][run] = zeroNan(FNMap[NP][run])              
-                if problem == 'mem' or problem == 'mem2':
-                    errors = np.array(errors)/float(P)
-                elif problem == 'gen' or problem == 'gen2':
-                    errors = np.array(errors)/float(maxIterations)               
-                runMap[NP] = runMap[NP] + 1
-            #print errors
-                trace = np.zeros(maxEpochs)
-                trace[0:len(errors)] = errors
-                cumTrace = cumTrace + trace
-                
-                negTrace = np.zeros(maxEpochs)
-                negTrace[0:len(fn)] = fn
-                cumNegTrace = cumNegTrace + negTrace
-                
-                posTrace = np.zeros(maxEpochs)
-                posTrace[0:len(fp)] = fp
-                cumPosTrace = cumPosTrace + posTrace
-    
-            cumTrace = cumTrace/numRuns
-            #print(cumTrace)
-            plt.figure('Capacity' +str(problem))
-            plt.subplot(1, len(MESWs), plotNum)
-            plt.plot(range(len(cumTrace)), 1 - cumTrace, label = str(NP))
-            plt.ylim([0.5,1])
-            plt.legend(loc = 'best')
-            plt.title(str(MESW))
-            plt.show()
-            plt.pause(0.001)
-    #         
-    #         cumPosTrace = cumPosTrace/numRuns
-    #         print cumPosTrace
-    #         plt.figure('FP')
-    #         plt.subplot(1, len(MESWs), plotNum)
-    #         plt.plot(range(len(cumPosTrace)), cumPosTrace, label = str(NP))
-    #         plt.legend(loc = 'best')
-    #         plt.title(str(MESW))
-    #         plt.show()
-    #         
-    #         cumNegTrace = cumNegTrace/numRuns
-    #         print cumNegTrace
-    #         plt.figure('FN')
-    #         plt.subplot(1, len(MESWs), plotNum)
-    #         plt.plot(range(len(cumNegTrace)), cumNegTrace, label = str(NP))
-    #         plt.legend(loc = 'best')
-    #         plt.title(str(MESW))
-    #         plt.show()
-        plt.savefig(folderName + str(problem) + '.png')
-        if save:
-            pickleName = folderName + '/M&P' + stringCleaner(MESW)  + '.pkl'
-            print pickleName
-            print runMap
-            print NPMap
-            with open(pickleName, 'w+') as f:
-                pkl.dump({'NPMap':NPMap, 'FPMap':FPMap, 'FNMap':FNMap, 'runMap':runMap}, f)
+    for AA in [0,1]:
+        for MESW in MESWs:
+            NPs = order
+            NPMap= {NPs[ind]:np.nan * np.ones([numRuns, maxEpochs]) for ind in range(len(NPs))}
+            FPMap= {NPs[ind]:np.nan * np.ones([numRuns, maxEpochs]) for ind in range(len(NPs))}
+            FNMap= {NPs[ind]:np.nan * np.ones([numRuns, maxEpochs]) for ind in range(len(NPs))}
+            runMap = {NPs[ind]:0 for ind in range(len(NPs))}
+            plotNum = MESWs.index(MESW)+1
+            for NP in order:
+                N = NP[0]
+                P = NP[1]
+                activeNum = N * activeRatio
+                print activeNum
+                cumTrace = np.zeros(maxEpochs)
+                cumPosTrace = np.zeros(maxEpochs)
+                cumNegTrace = np.zeros(maxEpochs)
+                distParams = [NP[1]] #This is the variance of the beta distribution
+                #if problem == 'mem':
+                    #lr = 0.1/P #Note: This is for review!
+                for run in range(numRuns):
+                    print str(NP) + ' ' + str(MESW) + 'run' + str(run)
+                    if problem == 'mem':
+                        newlr = lr
+    #                     if P == 2000:
+    #                         newlr = lr/5
+                        data = pg.generateRand(P,N,inhibRatio, activeNum)
+                        perc = Perceptron(data, problem, MESW = MESW, bias = 0, AA = AA)
+                        errors, fp, fn = perc.learnMem(maxEpochs, newlr, Adam = True, lambd = 0)
+                    elif problem == 'mem2':
+                        activeRatio = activeRatio
+                        data = pg.generateRand(P,N,inhibRatio, N*activeRatio)
+                        perc = Perceptron(data, problem, MESW = MESW, passive = passive)
+                        errors, fp, fn = perc.learnMem(maxEpochs, lr, Adam = True)
+                    elif problem == 'gen':
+                        maxIterations = 100
+                        numContexts = 2
+                        labels = np.ones(numContexts)
+                        labels[numContexts/2:numContexts] = -1
+                        data = pg.DataSetGen(N, activeNum, labels, distribution = 'beta', params = distParams)
+                        perc = Perceptron(data, problem, MESW = MESW)
+                        errors, fp, fn = perc.learnGen(maxEpochs, maxIterations, 0.0005,  Adam = True)
+                    elif problem == 'gen2':
+                        numContexts = 2
+                        labels = np.ones(numContexts)
+                        labels[numContexts/2:numContexts] = -1
+                        data = pg.DataSetBitFlip(N, activeNum, [-1,1], P, inhibRatio = 0)
+                        perc = Perceptron(data, problem, MESW = MESW)
+                        errors, fp, fn = perc.learnGen(maxEpochs, maxIterations, lr,  Adam = 0)
+                    #data = pg.generateNonBinary(P,N,inhibRatio)
+                    #data.sort()
+                    NPMap[NP][run][0:len(errors)] = errors
+                    FPMap[NP][run][0:len(errors)] = fp
+                    FNMap[NP][run][0:len(errors)] = fn
+                    NPMap[NP][run] = zeroNan(NPMap[NP][run])
+                    FPMap[NP][run] = zeroNan(FPMap[NP][run]) 
+                    FNMap[NP][run] = zeroNan(FNMap[NP][run])              
+                    if problem == 'mem' or problem == 'mem2':
+                        errors = np.array(errors)/float(P)
+                    elif problem == 'gen' or problem == 'gen2':
+                        errors = np.array(errors)/float(maxIterations)               
+                    runMap[NP] = runMap[NP] + 1
+                #print errors
+                    trace = np.zeros(maxEpochs)
+                    trace[0:len(errors)] = errors
+                    cumTrace = cumTrace + trace
+                    
+                    negTrace = np.zeros(maxEpochs)
+                    negTrace[0:len(fn)] = fn
+                    cumNegTrace = cumNegTrace + negTrace
+                    
+                    posTrace = np.zeros(maxEpochs)
+                    posTrace[0:len(fp)] = fp
+                    cumPosTrace = cumPosTrace + posTrace
+        
+                cumTrace = cumTrace/numRuns
+                #print(cumTrace)
+                plt.figure('Capacity' +str(problem) +str(AA))
+                plt.subplot(1, len(MESWs), plotNum)
+                plt.plot(range(len(cumTrace)), 1 - cumTrace, label = str(NP))
+                plt.ylim([0.5,1])
+                plt.legend(loc = 'best')
+                plt.title(str(MESW))
+                plt.show()
+                plt.pause(0.001)
+        #         
+        #         cumPosTrace = cumPosTrace/numRuns
+        #         print cumPosTrace
+        #         plt.figure('FP')
+        #         plt.subplot(1, len(MESWs), plotNum)
+        #         plt.plot(range(len(cumPosTrace)), cumPosTrace, label = str(NP))
+        #         plt.legend(loc = 'best')
+        #         plt.title(str(MESW))
+        #         plt.show()
+        #         
+        #         cumNegTrace = cumNegTrace/numRuns
+        #         print cumNegTrace
+        #         plt.figure('FN')
+        #         plt.subplot(1, len(MESWs), plotNum)
+        #         plt.plot(range(len(cumNegTrace)), cumNegTrace, label = str(NP))
+        #         plt.legend(loc = 'best')
+        #         plt.title(str(MESW))
+        #         plt.show()
+            plt.savefig(folderName + str(problem) + '.png')
+            if save:
+                if AA:
+                    pickleName = folderName + '_AA' + '/M&P AA_' + stringCleaner(MESW)  + '.pkl'
+                else:
+                    pickleName = folderName + '/M&P' + stringCleaner(MESW)  + '.pkl'
+                print pickleName
+                #print runMap
+                print NPMap
+                with open(pickleName, 'w+') as f:
+                    pkl.dump({'NPMap':NPMap, 'FPMap':FPMap, 'FNMap':FNMap, 'runMap':runMap}, f)
         #plt.close('all')
         #finals = np.empty((len(Ns), len(Ps)))      
     #     for i in range(len(Ns)):
@@ -496,12 +517,18 @@ def stringCleaner(my_str):
  
 
 MESWs =  ['soma', 'full', 'basal', 'aTuft', None]
-save = 0
+#MESWs = ['aTuft']
+# MESWs = ['None', 'aTuft']
+#MESWs = ['None']
+#MESWs = ['aTuft']
+# order = [(10000,1000), (2000,1000), (1000,1000)]
+# order = [(1000,100), (1000,1000), (1000,2000)]
+# capacityCalc(order, problem = 'mem', MESWs = MESWs)
+ 
+
 # print order
-#For generalization task
+save = 0
 # order = [(1000, 0), (1000, 100), (1000, 200)]
 # capacityCalc(order, problem = 'gen2', MESWs = MESWs, passive = False, save = save)
-
-#For memorization task
 order = [(1000, 100), (1000, 1000), (1000, 2000)]
 capacityCalc(order, problem = 'mem', MESWs = MESWs, passive = False, save = save)
